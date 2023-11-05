@@ -26,6 +26,7 @@ async function run() {
 
     const booksCollection = client.db("BookWaves").collection("books");
     const categoryCollection = client.db("BookWaves").collection("brands");
+    const borrowCollection = client.db("BookWaves").collection("borrows");
 
     // rendering home card
     app.get("/brands", async (req, res) => {
@@ -44,6 +45,7 @@ async function run() {
       console.log(result);
     });
 
+    // update book info
     app.put("/book/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -60,7 +62,30 @@ async function run() {
       };
       const result = await booksCollection.updateOne(filter, book);
       res.send(result);
-      console.log(result);
+      // console.log(result);
+    });
+
+    // update quantity
+    app.put("/book/update/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedQuantity = req.body.quantity;
+
+      try {
+        const result = await booksCollection.updateOne(filter, {
+          $set: { quantity: updatedQuantity },
+        });
+
+        if (updatedQuantity === 0) {
+          return res.status(400).send({ message: "Book Unavailable." });
+        }
+
+        res.send(result);
+        console.log(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Internal server error." });
+      }
     });
 
     app.get("/books", async (req, res) => {
@@ -90,6 +115,32 @@ async function run() {
       res.send(result);
       // console.log(result)
     });
+
+    // api for Borrow
+    app.post("/borrow", async (req, res) => {
+      const borrowData = req.body;
+      const existingBorrow = await borrowCollection.findOne({
+        "product._id": borrowData.product._id,
+        email: borrowData.email,
+      });
+      if (existingBorrow) {
+        return res
+          .status(400)
+          .send({ message: "User already borrowed this book." });
+      }
+      const result = await borrowCollection.insertOne(borrowData);
+      res.send(result);
+    });
+    // api for email fetch
+    app.get('/borrowing', async(req,res)=>{
+      console.log(req.query.email)
+      let query = {};
+      if (req.query?.email) {
+        query = { email: req.query.email }
+    }
+    const result = await borrowCollection.find(query).toArray();
+    res.send(result);
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
