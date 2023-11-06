@@ -42,7 +42,7 @@ async function run() {
       const book = req.body;
       const result = await booksCollection.insertOne(book);
       res.send(result);
-      console.log(result);
+      // console.log(result);
     });
 
     // update book info
@@ -81,9 +81,9 @@ async function run() {
         }
 
         res.send(result);
-        console.log(result);
+        // console.log(result);
       } catch (error) {
-        console.error(error);
+        // console.error(error);
         res.status(500).json({ message: "Internal server error." });
       }
     });
@@ -103,7 +103,7 @@ async function run() {
         const result = await cursor.toArray();
         res.send(result);
       } catch (error) {
-        console.error("Error fetching phones:", error);
+        // console.error("Error fetching phones:", error);
         res.status(500).send("Internal Server Error");
       }
     });
@@ -133,7 +133,7 @@ async function run() {
     });
     // api for email fetch
     app.get("/borrowing", async (req, res) => {
-      console.log(req.query.email);
+      // console.log(req.query.email);
       let query = {};
       if (req.query?.email) {
         query = { email: req.query.email };
@@ -148,6 +148,25 @@ async function run() {
       const result = await borrowCollection.deleteOne(query);
       res.send(result);
     });
+
+    // api for adding book back to quatity
+    app.put(`/books/inc/:productId`, async (req, res) => {
+      const productId = req.params.productId;
+      const result = await booksCollection.findOneAndUpdate(
+        { _id: new ObjectId(productId) },
+        { $inc: { quantity: 1 } },
+        { returnDocument: "after" }
+      );
+
+      if (!result.value) {
+        return res.status(404).send("Product not found");
+      }
+
+      res.send(result);
+    });
+
+
+    
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
