@@ -1,45 +1,34 @@
 const express = require("express");
+require("dotenv").config();
 const cors = require("cors");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require(`jsonwebtoken`);
 const cookieParser = require("cookie-parser");
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 5000;
+jwtSecret = process.env.ACCESS_TOKEN_SECRET;
 
 app.use(
   cors({
-    origin: [`http://localhost:5173`],
+    origin: [
+      `http://localhost:5173`,
+      "https://bookwaves-c18d0.web.app",
+      "https://bookwaves-c18d0.firebaseapp.com",
+    ],
     credentials: true,
   })
 );
 app.use(express.json());
 app.use(cookieParser());
 
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.yuxyuxp.mongodb.net/?retryWrites=true&w=majority`;
-
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  },
-});
-
-// middlewares
-const logger = (req, res, next) => {
-  console.log("log: info", req.method, req.url);
-  next();
-};
-
+// middleware
 const verifyToken = (req, res, next) => {
   const token = req.cookies?.token;
   // console.log(`token in the middleware`, token);
   if (!token) {
     return res.status(401).send({ message: "Unauthorized access" });
   }
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+  jwt.verify(token, jwtSecret, (error, decoded) => {
     if (error) {
       return res.status(401).send({ message: "unauthorized access" });
     }
@@ -48,23 +37,47 @@ const verifyToken = (req, res, next) => {
   });
 };
 
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.yuxyuxp.mongodb.net/?retryWrites=true&w=majority`;
+
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
+});
+
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
+    const dbConnect = async () => {
+      try {
+        client.connect();
+        console.log("DB Connected Successfully✅");
+      } catch (error) {
+        console.log(error.name, error.message);
+      }
+    };
+    dbConnect();
+
+    // Database Info
     const booksCollection = client.db("BookWaves").collection("books");
     const categoryCollection = client.db("BookWaves").collection("brands");
     const borrowCollection = client.db("BookWaves").collection("borrows");
 
-    // auth api
+    // Default Route
+
+    app.get("/", (req, res) => {
+      res.send(`Welcome to BookWaves Server`);
+    });
+
+    // Auth Related Api
     app.post("/jwt", async (req, res) => {
       const user = req.body;
-      console.log("token for user", user);
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+      const token = jwt.sign(user, jwtSecret, {
         expiresIn: "2h",
       });
-
       res.cookie("token", token, {
         httpOnly: true,
         secure: true,
@@ -75,28 +88,24 @@ async function run() {
 
     app.post("/logout", async (req, res) => {
       const user = req.body;
-      console.log("loggingout user", user);
       res.clearCookie("token", { maxAge: 0 }).send({ success: true });
     });
 
-    // rendering home card
+    // Getting Brand Cards
     app.get("/brands", async (req, res) => {
       const cursor = categoryCollection.find();
       const result = await cursor.toArray();
       res.send(result);
-      // console.log(result)
     });
 
     // Api for all books
-
     app.post("/books", async (req, res) => {
       const book = req.body;
       const result = await booksCollection.insertOne(book);
       res.send(result);
-      // console.log(result);
     });
 
-    // update book info
+    // Update book info
     app.put("/book/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -116,7 +125,15 @@ async function run() {
       // console.log(result);
     });
 
-    // update quantity
+    // api for delete from Books collection
+    app.delete("/delete/book/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await booksCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    // update quantity decrees
     app.put("/book/update/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -132,20 +149,19 @@ async function run() {
         }
 
         res.send(result);
-        // console.log(result);
       } catch (error) {
-        // console.error(error);
         res.status(500).json({ message: "Internal server error." });
       }
     });
 
+    // Fetching All Books
     app.get("/books", async (req, res) => {
       const cursor = booksCollection.find();
       const result = await cursor.toArray();
       res.send(result);
-      // console.log(result)
     });
 
+    // Fetching Books By Category
     app.get("/book/:category?", async (req, res) => {
       const { category } = req.params;
       try {
@@ -154,20 +170,19 @@ async function run() {
         const result = await cursor.toArray();
         res.send(result);
       } catch (error) {
-        // console.error("Error fetching phones:", error);
         res.status(500).send("Internal Server Error");
       }
     });
 
+    // Getting book detail by id
     app.get("/book/detail/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await booksCollection.findOne(query);
       res.send(result);
-      // console.log(result)
     });
 
-    // api for Borrow
+    // Adding Books in Borrow collection
     app.post("/borrow", async (req, res) => {
       const borrowData = req.body;
       const existingBorrow = await borrowCollection.findOne({
@@ -182,12 +197,11 @@ async function run() {
       const result = await borrowCollection.insertOne(borrowData);
       res.send(result);
     });
-    // api for email fetch
-    app.get("/borrowing", logger, verifyToken, async (req, res) => {
-      console.log(req.query.email);
-      console.log("token owner", req.user);
-      if(req.user.email !== req.query.email){
-        return res.status(403).send({message: 'Forbidden access'})
+
+    // For Fetching borrow data based on email query
+    app.get("/borrowing", verifyToken, async (req, res) => {
+      if (req.user.email !== req.query.email) {
+        return res.status(403).send({ message: "Forbidden access" });
       }
       let query = {};
       if (req.query?.email) {
@@ -196,7 +210,8 @@ async function run() {
       const result = await borrowCollection.find(query).toArray();
       res.send(result);
     });
-    // api for delete
+
+    // api for delete from borrow collection
     app.delete("/borrowing/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -204,7 +219,7 @@ async function run() {
       res.send(result);
     });
 
-    // api for adding book back to quatity
+    // api for adding book back to quantity increase
     app.put(`/books/inc/:productId`, async (req, res) => {
       const productId = req.params.productId;
       const result = await booksCollection.findOneAndUpdate(
@@ -221,7 +236,7 @@ async function run() {
     });
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
@@ -231,10 +246,6 @@ async function run() {
   }
 }
 run().catch(console.dir);
-
-app.get("/", (req, res) => {
-  res.send(`Welcome to BookWaves Server`);
-});
 
 app.listen(port, () => {
   console.log(`BookWaves running at port ${port}`);
