@@ -65,6 +65,7 @@ async function run() {
     const booksCollection = client.db("BookWaves").collection("books");
     const categoryCollection = client.db("BookWaves").collection("brands");
     const borrowCollection = client.db("BookWaves").collection("borrows");
+    const serviceCollection = client.db("BookWaves").collection("services");
 
     // Default Route
 
@@ -94,6 +95,13 @@ async function run() {
     // Getting Brand Cards
     app.get("/brands", async (req, res) => {
       const cursor = categoryCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    // Getting Services
+    app.get("/services", async (req, res) => {
+      const cursor = serviceCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
